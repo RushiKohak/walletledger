@@ -216,6 +216,20 @@ class DepositApiTests extends ApiIntegrationTest {
         assertThat(sumOfUserBalances("GBP") + treasuryBalance("GBP")).isZero();
     }
 
+    @Test
+    void rejectsADepositWhoseCreditWouldOverflowTheBalance() {
+        long accountId = createUserAccount("UYU");
+        assertThat(deposit(accountId, 1, "UYU").longField("balanceAfter")).isEqualTo(1);
+
+        // 1 + Long.MAX_VALUE does not fit in a long, so the credit would wrap around to a
+        // negative balance. The arithmetic guard turns that into a 400 and the deposit rolls back.
+        ApiResponse response = deposit(accountId, Long.MAX_VALUE, "UYU");
+
+        assertError(response, HttpStatus.BAD_REQUEST);
+        assertThat(response.textField("message")).contains("range");
+        assertThat(balanceOf(accountId)).isEqualTo(1);
+    }
+
     private long treasuryCount(String currency) {
         return jdbc.queryForObject(
                 "SELECT count(*) FROM accounts WHERE type = 'SYSTEM' AND currency = ?",

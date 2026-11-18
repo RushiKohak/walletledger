@@ -58,12 +58,33 @@ class LedgerEntriesAppendOnlyTests extends ApiIntegrationTest {
         assertThat(amountsOf(transactionId)).containsOnly(900L);
     }
 
+    @Test
+    void aTruncateOfTheLedgerEntriesTableIsRejectedAndChangesNothing() {
+        String transactionId = postedTransaction("BAM", 300);
+
+        Throwable failure = catchThrowable(() -> jdbc.execute("TRUNCATE ledger_entries"));
+
+        assertThat(failure)
+                .as("a TRUNCATE of ledger_entries must fail")
+                .isInstanceOf(DataAccessException.class);
+        assertThat(failure).rootCause().hasMessageContaining("append-only");
+
+        // A statement-level trigger refuses the whole statement, so no row anywhere was lost.
+        assertThat(totalEntries()).isGreaterThanOrEqualTo(2L);
+        assertThat(countEntries(transactionId)).isEqualTo(2L);
+        assertThat(amountsOf(transactionId)).containsOnly(300L);
+    }
+
     /** Creates a real posted deposit and returns its transaction id, so both entries exist. */
     private String postedTransaction(String currency, long amount) {
         long accountId = createUserAccount(currency);
         ApiResponse response = deposit(accountId, amount, currency);
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED.value());
         return response.textField("transactionId");
+    }
+
+    private long totalEntries() {
+        return jdbc.queryForObject("SELECT count(*) FROM ledger_entries", (rs, rowNum) -> rs.getLong(1));
     }
 
     private long countEntries(String transactionId) {

@@ -26,6 +26,15 @@ public class ApiExceptionHandler {
         return respond(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
+    /**
+     * A request that is valid but conflicts with the current state: a transfer larger than the
+     * sender's balance. 409 rather than 400 or 422, because the same request may succeed later.
+     */
+    @ExceptionHandler(InsufficientFundsException.class)
+    ResponseEntity<ErrorResponse> handleInsufficientFunds(InsufficientFundsException exception) {
+        return respond(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidRequestException.class)
     ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException exception) {
         return respond(HttpStatus.BAD_REQUEST, exception.getMessage());
