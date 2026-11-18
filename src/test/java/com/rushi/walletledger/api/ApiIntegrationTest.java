@@ -101,6 +101,22 @@ abstract class ApiIntegrationTest {
         return send(HttpRequest.newBuilder(uri(path)).GET().build());
     }
 
+    /**
+     * A request described at the wire level, for the error tests: a body that is not JSON, a
+     * content type the endpoint does not accept, or a method the route does not implement.
+     *
+     * @param body the raw body, or null to send no body at all
+     */
+    protected ApiResponse sendRaw(String method, String path, String contentType, String body) {
+        HttpRequest request = HttpRequest.newBuilder(uri(path))
+                .method(method, body == null
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(body))
+                .header("Content-Type", contentType == null ? "application/json" : contentType)
+                .build();
+        return send(request);
+    }
+
     protected long createUserAccount(String currency) {
         ApiResponse response = postJson("/api/v1/accounts",
                 Map.of("ownerName", "Owner of " + currency, "currency", currency));
@@ -158,7 +174,12 @@ abstract class ApiIntegrationTest {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             HttpHeaders headers = new HttpHeaders();
             response.headers().map().forEach(headers::put);
-            return new ApiResponse(response.statusCode(), json.readTree(response.body()), headers);
+            // An empty body stays null rather than being parsed: a broken error path must show up
+            // as a failed status assertion, not as a parse failure inside the test helper.
+            JsonNode body = response.body() == null || response.body().isBlank()
+                    ? null
+                    : json.readTree(response.body());
+            return new ApiResponse(response.statusCode(), body, headers);
         } catch (IOException exception) {
             throw new IllegalStateException("HTTP call to " + request.uri() + " failed", exception);
         } catch (InterruptedException exception) {
