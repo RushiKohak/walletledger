@@ -35,6 +35,15 @@ public class ApiExceptionHandler {
         return respond(HttpStatus.CONFLICT, exception.getMessage());
     }
 
+    /**
+     * The key already means a different operation. 422 rather than 409: the request contradicts
+     * the key it names, so retrying it unchanged can never succeed.
+     */
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    ResponseEntity<ErrorResponse> handleIdempotencyKeyConflict(IdempotencyKeyConflictException exception) {
+        return respond(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidRequestException.class)
     ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException exception) {
         return respond(HttpStatus.BAD_REQUEST, exception.getMessage());

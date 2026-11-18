@@ -25,23 +25,26 @@ import java.util.UUID;
  * <p>A deposit is not "add to a number": it is a balanced double entry that debits the treasury
  * account of the currency and credits the user, so every rupee in a user wallet has a matching
  * negative rupee in the treasury and the books always sum to zero.
+ *
+ * <p>Each deposit is identified by its idempotency key, so retrying a request that already
+ * succeeded replays its original response instead of depositing twice.
  */
 @Service
 public class DepositService {
 
-    /** {@code ledger_transactions.idempotency_key} is VARCHAR(255). */
-    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
-
     private final AccountRepository accountRepository;
     private final LedgerTransactionRepository ledgerTransactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final IdempotencyService idempotency;
 
     public DepositService(AccountRepository accountRepository,
                           LedgerTransactionRepository ledgerTransactionRepository,
-                          LedgerEntryRepository ledgerEntryRepository) {
+                          LedgerEntryRepository ledgerEntryRepository,
+                          IdempotencyService idempotency) {
         this.accountRepository = accountRepository;
         this.ledgerTransactionRepository = ledgerTransactionRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
+        this.idempotency = idempotency;
     }
 
     /**
@@ -50,49 +53,53 @@ public class DepositService {
      * that disagrees with the entries.
      */
     @Transactional
-    public DepositResponse deposit(String idempotencyKey, DepositRequest request) {
-        String key = requireIdempotencyKey(idempotencyKey);
+    public MoneyMovementResult deposit(String idempotencyKey, DepositRequest request) {
         long amount = request.amount();
+        String requestHash = RequestHash.sha256(
+                canonicalRequest(request.accountId(), amount, request.currency()));
 
-        AccountIdentity target = accountRepository.findIdentityById(request.accountId())
-                .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
-        if (target.type() != AccountType.USER) {
-            throw new InvalidRequestException("deposits must target a USER account, not a SYSTEM account");
-        }
-        if (!target.currency().equals(request.currency())) {
-            throw new InvalidRequestException("currency " + request.currency()
-                    + " does not match the account currency " + target.currency());
-        }
+        return idempotency.execute(idempotencyKey, requestHash, key -> {
+            AccountIdentity target = accountRepository.findIdentityById(request.accountId())
+                    .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
+            if (target.type() != AccountType.USER) {
+                throw new InvalidRequestException("deposits must target a USER account, not a SYSTEM account");
+            }
+            if (!target.currency().equals(request.currency())) {
+                throw new InvalidRequestException("currency " + request.currency()
+                        + " does not match the account currency " + target.currency());
+            }
 
-        Long treasuryId = treasuryIdFor(target.currency());
+            Long treasuryId = treasuryIdFor(target.currency());
 
-        // Both rows are locked in ascending id order, and every money movement in the system locks
-        // in that same order. A consistent order is what makes a deadlock between two concurrent
-        // movements impossible: they can only ever queue behind each other.
-        Account firstLocked = lockAccount(Math.min(target.id(), treasuryId));
-        Account secondLocked = lockAccount(Math.max(target.id(), treasuryId));
-        Account user = firstLocked.getType() == AccountType.USER ? firstLocked : secondLocked;
-        Account treasury = user == firstLocked ? secondLocked : firstLocked;
+            // Both rows are locked in ascending id order, and every money movement in the system
+            // locks in that same order. A consistent order is what makes a deadlock between two
+            // concurrent movements impossible: they can only ever queue behind each other.
+            Account firstLocked = lockAccount(Math.min(target.id(), treasuryId));
+            Account secondLocked = lockAccount(Math.max(target.id(), treasuryId));
+            Account user = firstLocked.getType() == AccountType.USER ? firstLocked : secondLocked;
+            Account treasury = user == firstLocked ? secondLocked : firstLocked;
 
-        // Flushed before the entries are inserted because the entries reference it through a
-        // foreign key and Hibernate does not know about that dependency (entries hold a plain id).
-        LedgerTransaction transaction = LedgerTransaction.posted(
-                UUID.randomUUID(),
-                key,
-                RequestHash.sha256(canonicalRequest(target.id(), amount, target.currency())),
-                TransactionType.DEPOSIT);
-        ledgerTransactionRepository.saveAndFlush(transaction);
+            // What the user gains, the treasury loses. Both sides use Math.addExact/subtractExact,
+            // so an overflow raises an error (mapped to 400) instead of silently wrapping.
+            treasury.debit(amount);
+            user.credit(amount);
 
-        // What the user gains, the treasury loses. Both sides use Math.addExact/subtractExact, so
-        // an overflow raises an error (mapped to 400) instead of silently wrapping the balance.
-        treasury.debit(amount);
-        user.credit(amount);
+            UUID transactionId = UUID.randomUUID();
+            String responseBody = idempotency.json(new DepositResponse(
+                    transactionId, user.getId(), amount, target.currency(), user.getBalance()));
 
-        ledgerEntryRepository.saveAll(List.of(
-                LedgerEntry.debit(transaction.getId(), treasury.getId(), amount),
-                LedgerEntry.credit(transaction.getId(), user.getId(), amount)));
+            // Flushed before the entries are inserted because the entries reference it through a
+            // foreign key and Hibernate does not know about that dependency (entries hold a plain id).
+            // The response body is written with the row, which is why a replay needs no other source.
+            ledgerTransactionRepository.saveAndFlush(LedgerTransaction.posted(
+                    transactionId, key, requestHash, TransactionType.DEPOSIT, responseBody));
 
-        return new DepositResponse(transaction.getId(), user.getId(), amount, target.currency(), user.getBalance());
+            ledgerEntryRepository.saveAll(List.of(
+                    LedgerEntry.debit(transactionId, treasury.getId(), amount),
+                    LedgerEntry.credit(transactionId, user.getId(), amount)));
+
+            return responseBody;
+        });
     }
 
     /**
@@ -117,16 +124,5 @@ public class DepositService {
      */
     private static String canonicalRequest(long accountId, long amount, String currency) {
         return "DEPOSIT|" + accountId + "|" + amount + "|" + currency;
-    }
-
-    private static String requireIdempotencyKey(String idempotencyKey) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new InvalidRequestException("the Idempotency-Key header is required");
-        }
-        if (idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
-            throw new InvalidRequestException(
-                    "the Idempotency-Key header must be at most " + MAX_IDEMPOTENCY_KEY_LENGTH + " characters");
-        }
-        return idempotencyKey;
     }
 }

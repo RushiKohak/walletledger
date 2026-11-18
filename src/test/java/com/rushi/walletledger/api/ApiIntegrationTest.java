@@ -2,6 +2,7 @@ package com.rushi.walletledger.api;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -63,8 +64,13 @@ abstract class ApiIntegrationTest {
 
     private final ObjectMapper json = JsonMapper.builder().build();
 
-    /** A response as data: the status code and the parsed JSON body. */
-    protected record ApiResponse(int status, JsonNode body) {
+    /** A response as data: the status code, the parsed JSON body and the headers. */
+    protected record ApiResponse(int status, JsonNode body, HttpHeaders headers) {
+
+        /** The first value of a response header, or null when the header was not sent. */
+        String header(String name) {
+            return headers.getFirst(name);
+        }
 
         long longField(String name) {
             assertThat(body).as("response body").isNotNull();
@@ -150,7 +156,9 @@ abstract class ApiIntegrationTest {
     private ApiResponse send(HttpRequest request) {
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            return new ApiResponse(response.statusCode(), json.readTree(response.body()));
+            HttpHeaders headers = new HttpHeaders();
+            response.headers().map().forEach(headers::put);
+            return new ApiResponse(response.statusCode(), json.readTree(response.body()), headers);
         } catch (IOException exception) {
             throw new IllegalStateException("HTTP call to " + request.uri() + " failed", exception);
         } catch (InterruptedException exception) {

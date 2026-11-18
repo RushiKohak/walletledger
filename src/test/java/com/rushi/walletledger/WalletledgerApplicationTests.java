@@ -50,6 +50,6 @@ class WalletledgerApplicationTests {
 
         Long appliedMigrations = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM flyway_schema_history WHERE success", Long.class);
-        assertThat(appliedMigrations).isEqualTo(3L);
+        assertThat(appliedMigrations).isEqualTo(4L);
     }
 }
