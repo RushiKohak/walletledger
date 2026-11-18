@@ -1,0 +1,44 @@
+# Local stack for the API and its database. Values come from the environment with defaults that
+# match application.properties, so `docker compose up` works with no .env file and every value can
+# still be overridden per machine.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-walletledger}
+      POSTGRES_USER: ${DB_USER:-walletledger}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-walletledger}
+    volumes:
+      # Named volume, so the ledger survives `docker compose down` and only goes away with `down -v`.
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready answers on the real socket the server listens on, unlike a port probe: it is
+      # only healthy once PostgreSQL actually accepts connections.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-walletledger} -d ${DB_NAME:-walletledger}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No published port by default: only the app container needs the database. Uncomment to reach
+    # it from the host with psql or a GUI.
+    # ports:
+    #   - "5432:5432"
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # The host is the service name, not localhost: inside the compose network that name resolves
+      # to the db container.
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-walletledger}
+      DB_USER: ${DB_USER:-walletledger}
+      DB_PASSWORD: ${DB_PASSWORD:-walletledger}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  db-data:
