@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WalletLedger — k6 transfer results</title>
+<!--
+  A viewer, not a result.
+
+  It contains no numbers of its own: every figure on screen is computed from the k6 export you
+  load, in your browser. Nothing is uploaded, fetched or stored. Open this file directly.
+
+      k6 run --out json=k6-results-run1.json k6/transfer.js
+
+  then load k6-results-run1.json here. Load several runs at once to compare them.
+-->
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #14181f;
+    --muted: #5b6472;
+    --line: #e2e6ec;
+    --grid: #eef1f5;
+    --accent: #2563eb;
+    --warn: #b42318;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 40px 24px 72px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  main { max-width: 1080px; margin: 0 auto; }
+
+  h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span { color: var(--muted); font-weight: 400; }
+
+  .lede { margin: 0 0 28px; color: var(--muted); max-width: 68ch; }
+
+  h2 { font-size: 18px; margin: 0 0 8px; }
+  h3 { font-size: 15px; margin: 0; }
+
+  code {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #eceff4;
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  }
+
+  .loader { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 28px; }
+  .loader .drop {
+    flex: 1 1 320px;
+    border: 1.5px dashed #c4ccd8;
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    color: var(--muted);
+    background: #fbfcfe;
+  }
+  .loader .drop strong { color: var(--ink); }
+  .loader.drop-active .drop { border-color: var(--accent); background: #f0f6ff; }
+
+  .btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 9px;
+    padding: 10px 16px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .btn:hover { border-color: #b8c2d0; }
+  .btn.ghost { color: var(--muted); }
+
+  input[type="file"] {
+    font: inherit;
+    color: var(--muted);
+    max-width: 100%;
+  }
+
+  .empty { margin-top: 8px; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 16px 18px 6px;
+  }
+
+  .card h3 {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+  }
+
+  .card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0; }
+  .card dl > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--grid); }
+  .card dt { color: var(--muted); font-size: 13px; }
+  .card dd { margin: 0; font-weight: 600; font-size: 13px; }
+
+  .chart { margin: 0 0 28px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 10px; }
+  .chart figcaption { margin-bottom: 10px; }
+  .chart figcaption p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 6px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 0; border-top: 2.5px solid currentColor; display: inline-block; }
+  .legend i.dashed { border-top-style: dashed; }
+
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  svg .axis { font-size: 11px; fill: var(--muted); }
+  svg .axis-title { font-size: 11px; fill: var(--muted); }
+
+  .grid-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 28px; align-items: start; }
+
+  select {
+    font: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: var(--panel);
+    color: var(--ink);
+    margin-bottom: 8px;
+    max-width: 100%;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; overflow-wrap: anywhere; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.bad { color: var(--warn); font-weight: 600; }
+
+  .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+  .fail { color: var(--warn); }
+</style>
+</head>
+<body>
+<main>
+  <h1>WalletLedger <span>— k6 transfer results</span></h1>
+  <p class="lede">
+    This page contains no measurements of its own. Every value below is computed from the k6 JSON
+    export you load, in this browser tab: nothing is uploaded, requested or stored, and the page
+    works from the file system with no server and no dependencies.
+  </p>
+
+  <section class="panel loader" id="loader">
+    <div class="drop" id="drop">
+      <strong>Drop k6 JSON exports here</strong> or choose files —
+      e.g. <code>k6-results-run1.json</code>. Load two or more runs to compare them.
+    </div>
+    <div>
+      <input type="file" id="files" accept=".json,.ndjson,application/json" multiple>
+    </div>
+    <button class="btn ghost" id="clear" type="button" hidden>Clear</button>
+  </section>
+
+  <section id="empty" class="empty">
+    <h2>No run loaded</h2>
+    <p class="lede" style="margin-bottom:10px">Export a run, then load the file above:</p>
+    <pre class="panel" style="margin:0 0 14px"><code>k6 run --out json=k6-results-run1.json k6/transfer.js</code></pre>
+    <p class="note">
+      <code>--out json=…</code> writes one JSON object per sample, which is what makes a per-second
+      view of throughput and latency possible. A <code>--summary-export</code> file only holds end
+      totals and cannot be charted over time.
+    </p>
+  </section>
+
+  <section id="results" hidden>
+    <div class="cards" id="cards"></div>
+
+    <figure class="chart">
+      <figcaption>
+        <h3>Throughput</h3>
+        <p>Requests per second, counted from the <code>http_reqs</code> samples of each run.</p>
+      </figcaption>
+      <div class="legend" id="legend-throughput"></div>
+      <svg id="chart-throughput" viewBox="0 0 960 340" role="img"
+           aria-label="Requests per second during the run"></svg>
+    </figure>
+
+    <figure class="chart">
+      <figcaption>
+        <h3>Transfer latency percentiles</h3>
+        <p>
+          <code>transfer_latency</code> per second — the transfer endpoint alone, not setup or
+          teardown traffic. Solid is p95, dashed is p50; the red dashed line is the p(95)
+          guardrail declared in <code>transfer.js</code>, not a target.
+        </p>
+      </figcaption>
+      <div class="legend" id="legend-latency"></div>
+      <svg id="chart-latency" viewBox="0 0 960 340" role="img"
+           aria-label="Transfer latency percentiles during the run"></svg>
+    </figure>
+
+    <div class="grid-two">
+      <figure class="chart">
+        <figcaption>
+          <h3>Latency distribution</h3>
+          <p>Every <code>transfer_latency</code> sample of one run, in milliseconds.</p>
+        </figcaption>
+        <select id="select-run" aria-label="Run shown in the distribution"></select>
+        <svg id="chart-histogram" viewBox="0 0 640 300" role="img"
+             aria-label="Histogram of transfer latency"></svg>
+      </figure>
+
+      <figure class="chart">
+        <figcaption>
+          <h3>Outcomes</h3>
+          <p>Status codes returned, failed requests and unexpected statuses.</p>
+        </figcaption>
+        <table id="outcomes">
+          <thead>
+            <tr>
+              <th scope="col">Run</th>
+              <th scope="col">Requests</th>
+              <th scope="col">Failed</th>
+              <th scope="col">Unexpected</th>
+              <th scope="col">Status codes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="note" id="outcomes-note"></p>
+      </figure>
+    </div>
+
+    <p class="note">
+      Percentiles use the nearest-rank method on the samples in the file. These pages are only as
+      meaningful as the conditions of the run; record machine, Docker limits, <code>DB_POOL_SIZE</code>,
+      VUs and duration next to any number you publish.
+    </p>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // -----------------------------------------------------------------------------------------
+  // Constants and state
+  // -----------------------------------------------------------------------------------------
+
+  var PALETTE = ['#2563eb', '#ea580c', '#059669', '#7c3aed', '#0891b2', '#be123c'];
+  var P95_GUARDRAIL_MS = 500; // mirrors thresholds in transfer.js
+  var MAX_BUCKETS = 100000;
+
+  var state = { runs: [], selected: 0 };
+
+  // -----------------------------------------------------------------------------------------
+  // Maths
+  // -----------------------------------------------------------------------------------------
+
+  /** Nearest-rank percentile on an ascending sorted array. */
+  function percentile(sorted, p) {
+    if (!sorted.length) return null;
+    var index = Math.ceil((p / 100) * sorted.length) - 1;
+    if (index < 0) index = 0;
+    if (index > sorted.length - 1) index = sorted.length - 1;
+    return sorted[index];
+  }
+
+  function sortedCopy(values) {
+    return values.slice().sort(function (a, b) { return a - b; });
+  }
+
+  /** Rounds a maximum up to a readable axis bound (1, 2, 2.5, 5 or 10 times a power of ten). */
+  function niceCeil(value) {
+    if (!(value > 0)) return 1;
+    var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+    var normalized = value / magnitude;
+    var step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+    return step * magnitude;
+  }
+
+  function ticks(max, count) {
+    var out = [];
+    var step = max / count;
+    for (var i = 0; i <= count; i += 1) out.push(i * step);
+    return out;
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Formatting
+  // -----------------------------------------------------------------------------------------
+
+  var intFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+  var oneDecimal = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  function formatInt(value) {
+    return value == null ? '—' : intFormat.format(value);
+  }
+
+  function formatMs(value) {
+    if (value == null) return '—';
+    if (value > 0 && value < 1) return '< 1 ms';
+    return intFormat.format(value) + ' ms';
+  }
+
+  function formatRate(value) {
+    return value == null ? '—' : oneDecimal.format(value) + ' req/s';
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Parsing a k6 JSON export
+  // -----------------------------------------------------------------------------------------
+
+  function newRun(name) {
+    return {
+      name: name,
+      color: PALETTE[state.runs.length % PALETTE.length],
+      transferLatency: [],
+      httpDuration: [],
+      buckets: new Map(), // epoch second -> { reqs, latency: [] }
+      requests: 0,
+      failed: 0,
+      statuses: new Map(),
+      unexpected: new Map()
+    };
+  }
+
+  function bucketFor(run, second) {
+    var bucket = run.buckets.get(second);
+    if (!bucket) {
+      bucket = { reqs: 0, latency: [] };
+      if (run.buckets.size < MAX_BUCKETS) run.buckets.set(second, bucket);
+    }
+    return bucket;
+  }
+
+  function increment(map, key) {
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+
+  /**
+   * Reads one export. Lines that are not JSON points are skipped rather than failing the whole
+   * file, so a truncated run (or stray console output appended by a shell) still charts.
+   */
+  function parseRun(name, text) {
+    var run = newRun(name);
+    var lines = text.split('\n');
+
+    for (var i = 0; i < lines.length; i += 1) {
+      var line = lines[i].trim();
+      if (line.charCodeAt(0) !== 123 /* { */) continue;
+
+      var point;
+      try {
+        point = JSON.parse(line);
+      } catch (error) {
+        continue;
+      }
+      if (!point || point.type !== 'Point' || !point.data) continue;
+
+      var data = point.data;
+      var time = Date.parse(data.time);
+      var value = Number(data.value);
+      if (!Number.isFinite(time) || !Number.isFinite(value)) continue;
+
+      var tags = data.tags || {};
+      var second = Math.floor(time / 1000);
+
+      switch (point.metric) {
+        case 'transfer_latency':
+          run.transferLatency.push(value);
+          bucketFor(run, second).latency.push(value);
+          break;
+        case 'http_req_duration':
+          run.httpDuration.push(value);
+          break;
+        case 'http_reqs':
+          run.requests += 1;
+          bucketFor(run, second).reqs += 1;
+          increment(run.statuses, String(tags.status || 'unknown'));
+          break;
+        case 'http_req_failed':
+          if (value >= 1) run.failed += 1;
+          break;
+        case 'unexpected_statuses':
+          increment(run.unexpected, String(tags.status || 'unknown'));
+          break;
+        default:
+          break;
+      }
+    }
+
+    return finalise(run);
+  }
+
+  /** Sorts the samples once and derives the per-second series the charts draw. */
+  function finalise(run) {
+    var seconds = Array.from(run.buckets.keys()).sort(function (a, b) { return a - b; });
+    var first = seconds.length ? seconds[0] : 0;
+    var last = seconds.length ? seconds[seconds.length - 1] : 0;
+
+    var throughput = [];
+    var p50 = [];
+    var p95 = [];
+
+    for (var second = first; second <= last && seconds.length; second += 1) {
+      var x = second - first;
+      var bucket = run.buckets.get(second);
+      throughput.push([x, bucket ? bucket.reqs : 0]);
+
+      if (bucket && bucket.latency.length) {
+        var sorted = sortedCopy(bucket.latency);
+        p50.push([x, percentile(sorted, 50)]);
+        p95.push([x, percentile(sorted, 95)]);
+      }
+    }
+
+    run.stats = {
+      transferCount: run.transferLatency.length,
+      p50: percentile(sortedCopy(run.transferLatency), 50),
+      p95: percentile(sortedCopy(run.transferLatency), 95),
+      p99: percentile(sortedCopy(run.transferLatency), 99),
+      max: run.transferLatency.length ? Math.max.apply(null, run.transferLatency) : null,
+      durationSeconds: seconds.length ? last - first + 1 : 0,
+      averageRate: seconds.length && last > first ? run.requests / (last - first + 1) : null
+    };
+
+    run.series = { throughput: throughput, p50: p50, p95: p95 };
+    delete run.buckets;
+    return run;
+  }
+
+  function addRun(name, text) {
+    var run = parseRun(name, text);
+    var existing = state.runs.findIndex(function (candidate) { return candidate.name === name; });
+    if (existing >= 0) {
+      run.color = state.runs[existing].color;
+      state.runs[existing] = run;
+      if (state.selected >= state.runs.length) state.selected = 0;
+    } else {
+      state.runs.push(run);
+      if (state.runs.length === 1) state.selected = 0;
+    }
+    render();
+  }
+
+  function clearAll() {
+    state.runs = [];
+    state.selected = 0;
+    render();
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // SVG helpers
+  // -----------------------------------------------------------------------------------------
+
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function svgEl(tag, attrs, text) {
+    var node = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function reset(svg) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  /**
+   * Draws a line chart with axes, horizontal gridlines and one polyline per series.
+   * series: [{ label, color, points: [[x, y], …], dashed, width }]
+   */
+  function lineChart(svg, series, options) {
+    reset(svg);
+
+    var width = Number(svg.viewBox.baseVal.width) || 960;
+    var height = Number(svg.viewBox.baseVal.height) || 340;
+    var margin = { top: 16, right: 24, bottom: 44, left: 62 };
+    var plotWidth = width - margin.left - margin.right;
+    var plotHeight = height - margin.top - margin.bottom;
+
+    var drawn = series.filter(function (s) { return s.points.length > 0; });
+    var maxX = 1;
+    var maxY = 0;
+
+    drawn.forEach(function (s) {
+      s.points.forEach(function (point) {
+        if (point[0] > maxX) maxX = point[0];
+        if (point[1] > maxY) maxY = point[1];
+      });
+    });
+    if (options.includeThreshold && P95_GUARDRAIL_MS > maxY) maxY = P95_GUARDRAIL_MS;
+
+    var yMax = options.yMax || niceCeil(maxY * 1.08);
+    var xMax = Math.max(maxX, 1);
+
+    var xScale = function (x) { return margin.left + (x / xMax) * plotWidth; };
+    var yScale = function (y) { return margin.top + plotHeight - (y / yMax) * plotHeight; };
+
+    // Horizontal gridlines and y-axis labels.
+    ticks(yMax, 4).forEach(function (value) {
+      var y = yScale(value);
+      svg.appendChild(svgEl('line', {
+        x1: margin.left, x2: margin.left + plotWidth, y1: y, y2: y, stroke: '#eef1f5', 'stroke-width': 1
+      }));
+      svg.appendChild(svgEl('text', {
+        x: margin.left - 10, y: y + 4, 'text-anchor': 'end', class: 'axis'
+      }, options.yFormat ? options.yFormat(value) : formatInt(value)));
+    });
+
+    // X axis.
+    var xTickCount = Math.min(8, Math.max(2, Math.round(plotWidth / 120)));
+    ticks(xMax, xTickCount).forEach(function (value) {
+      var x = xScale(value);
+      svg.appendChild(svgEl('line', {
+        x1: x, x2: x, y1: margin.top, y2: margin.top + plotHeight, stroke: '#f5f7fa', 'stroke-width': 1
+      }));
+      svg.appendChild(svgEl('text', {
+        x: x, y: margin.top + plotHeight + 20, 'text-anchor': 'middle', class: 'axis'
+      }, Math.round(value) + 's'));
+    });
+
+    svg.appendChild(svgEl('line', {
+      x1: margin.left, x2: margin.left + plotWidth,
+      y1: margin.top + plotHeight, y2: margin.top + plotHeight,
+      stroke: '#cfd6e0', 'stroke-width': 1
+    }));
+
+    svg.appendChild(svgEl('text', {
+      x: margin.left + plotWidth / 2, y: height - 6, 'text-anchor': 'middle', class: 'axis-title'
+    }, 'seconds from the first sample'));
+
+    // Guardrail: the p(95) threshold declared in the script.
+    if (options.includeThreshold) {
+      var thresholdY = yScale(P95_GUARDRAIL_MS);
+      svg.appendChild(svgEl('line', {
+        x1: margin.left, x2: margin.left + plotWidth, y1: thresholdY, y2: thresholdY,
+        stroke: '#d92d20', 'stroke-width': 1.5, 'stroke-dasharray': '6 5', opacity: 0.8
+      }));
+      svg.appendChild(svgEl('text', {
+        x: margin.left + plotWidth - 4, y: thresholdY - 7, 'text-anchor': 'end',
+        class: 'axis', fill: '#b42318'
+      }, 'p(95) guardrail ' + P95_GUARDRAIL_MS + ' ms'));
+    }
+
+    // Series.
+    drawn.forEach(function (s) {
+      var d = s.points.map(function (point, index) {
+        return (index === 0 ? 'M' : 'L') + xScale(point[0]).toFixed(2) + ' ' + yScale(point[1]).toFixed(2);
+      }).join(' ');
+      svg.appendChild(svgEl('path', {
+        d: d,
+        fill: 'none',
+        stroke: s.color,
+        'stroke-width': s.width || 2,
+        'stroke-linejoin': 'round',
+        'stroke-linecap': 'round',
+        'stroke-dasharray': s.dashed ? '5 4' : null
+      }));
+    });
+  }
+
+  /** A bar chart for the latency distribution. bars: [{ label, value }] plus a bin width. */
+  function barChart(svg, bars, options) {
+    reset(svg);
+
+    var width = Number(svg.viewBox.baseVal.width) || 640;
+    var height = Number(svg.viewBox.baseVal.height) || 300;
+    var margin = { top: 16, right: 16, bottom: 42, left: 56 };
+    var plotWidth = width - margin.left - margin.right;
+    var plotHeight = height - margin.top - margin.bottom;
+
+    var maxY = 0;
+    bars.forEach(function (bar) { if (bar.value > maxY) maxY = bar.value; });
+    var yMax = niceCeil(maxY || 1);
+
+    var slot = bars.length ? plotWidth / bars.length : plotWidth;
+    var yScale = function (y) { return margin.top + plotHeight - (y / yMax) * plotHeight; };
+
+    ticks(yMax, 4).forEach(function (value) {
+      var y = yScale(value);
+      svg.appendChild(svgEl('line', {
+        x1: margin.left, x2: margin.left + plotWidth, y1: y, y2: y, stroke: '#eef1f5', 'stroke-width': 1
+      }));
+      svg.appendChild(svgEl('text', {
+        x: margin.left - 10, y: y + 4, 'text-anchor': 'end', class: 'axis'
+      }, formatInt(value)));
+    });
+
+    bars.forEach(function (bar, index) {
+      var barHeight = Math.max(0, margin.top + plotHeight - yScale(bar.value));
+      svg.appendChild(svgEl('rect', {
+        x: margin.left + index * slot + slot * 0.12,
+        y: yScale(bar.value),
+        width: slot * 0.76,
+        height: barHeight,
+        fill: options.color || '#2563eb',
+        'fill-opacity': 0.85,
+        rx: 2
+      }));
+    });
+
+    // A few x labels, not one per bin.
+    var labelEvery = Math.max(1, Math.ceil(bars.length / 7));
+    bars.forEach(function (bar, index) {
+      if (index % labelEvery !== 0) return;
+      svg.appendChild(svgEl('text', {
+        x: margin.left + index * slot + slot / 2,
+        y: margin.top + plotHeight + 18,
+        'text-anchor': 'middle',
+        class: 'axis'
+      }, bar.label));
+    });
+
+    svg.appendChild(svgEl('text', {
+      x: margin.left + plotWidth / 2, y: height - 6, 'text-anchor': 'middle', class: 'axis-title'
+    }, 'latency (ms)'));
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Rendering
+  // -----------------------------------------------------------------------------------------
+
+  function legend(container, entries) {
+    container.innerHTML = '';
+    entries.forEach(function (entry) {
+      var item = document.createElement('span');
+      item.style.color = entry.color;
+      var swatch = document.createElement('i');
+      if (entry.dashed) swatch.className = 'dashed';
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(entry.label));
+      container.appendChild(item);
+    });
+  }
+
+  function renderCards() {
+    var cards = document.getElementById('cards');
+    cards.innerHTML = '';
+
+    state.runs.forEach(function (run) {
+      var card = document.createElement('article');
+      card.className = 'card';
+      card.style.borderTopColor = run.color;
+
+      var heading = document.createElement('h3');
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = run.color;
+      heading.appendChild(dot);
+      heading.appendChild(document.createTextNode(run.name));
+      card.appendChild(heading);
+
+      var unexpectedTotal = 0;
+      run.unexpected.forEach(function (count) { unexpectedTotal += count; });
+
+      var rows = [
+        ['Transfers measured', formatInt(run.stats.transferCount)],
+        ['Requests', formatInt(run.requests)],
+        ['Average rate', formatRate(run.stats.averageRate)],
+        ['p50', formatMs(run.stats.p50)],
+        ['p95', formatMs(run.stats.p95)],
+        ['p99', formatMs(run.stats.p99)],
+        ['Max', formatMs(run.stats.max)],
+        ['Failed', formatInt(run.failed)],
+        ['Unexpected', formatInt(unexpectedTotal)],
+        ['Duration', formatInt(run.stats.durationSeconds) + ' s']
+      ];
+
+      var list = document.createElement('dl');
+      rows.forEach(function (row) {
+        var wrapper = document.createElement('div');
+        var term = document.createElement('dt');
+        term.textContent = row[0];
+        var value = document.createElement('dd');
+        value.textContent = row[1];
+        wrapper.appendChild(term);
+        wrapper.appendChild(value);
+        list.appendChild(wrapper);
+      });
+      card.appendChild(list);
+      cards.appendChild(card);
+    });
+  }
+
+  function renderThroughput() {
+    var series = [];
+    var legendEntries = [];
+
+    state.runs.forEach(function (run) {
+      series.push({ label: run.name, color: run.color, points: run.series.throughput, width: 2 });
+      legendEntries.push({ label: run.name, color: run.color });
+    });
+
+    legend(document.getElementById('legend-throughput'), legendEntries);
+    lineChart(document.getElementById('chart-throughput'), series, {
+      yFormat: function (value) { return formatInt(value) + '/s'; }
+    });
+  }
+
+  function renderLatency() {
+    var series = [];
+    var legendEntries = [];
+
+    state.runs.forEach(function (run) {
+      series.push({ label: run.name + ' p95', color: run.color, points: run.series.p95, width: 2.25 });
+      series.push({ label: run.name + ' p50', color: run.color, points: run.series.p50, width: 1.5, dashed: true });
+      legendEntries.push({ label: run.name + ' p95', color: run.color });
+      legendEntries.push({ label: run.name + ' p50', color: run.color, dashed: true });
+    });
+
+    legend(document.getElementById('legend-latency'), legendEntries);
+    lineChart(document.getElementById('chart-latency'), series, {
+      includeThreshold: true,
+      yFormat: function (value) { return formatInt(value) + ' ms'; }
+    });
+  }
+
+  function histogramBins(values, binCount) {
+    var sorted = sortedCopy(values);
+    var max = sorted.length ? sorted[sorted.length - 1] : 1;
+    var upper = Math.max(niceCeil(max), 1);
+    var width = upper / binCount;
+    var bins = [];
+
+    for (var i = 0; i < binCount; i += 1) {
+      bins.push({ from: i * width, to: (i + 1) * width, value: 0 });
+    }
+    sorted.forEach(function (value) {
+      var index = Math.min(binCount - 1, Math.floor(value / width));
+      bins[index].value += 1;
+    });
+    bins.forEach(function (bin) {
+      bin.label = Math.round(bin.from) + '';
+    });
+    return bins;
+  }
+
+  function renderHistogram() {
+    var select = document.getElementById('select-run');
+    select.innerHTML = '';
+
+    state.runs.forEach(function (run, index) {
+      var option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = run.name;
+      if (index === state.selected) option.selected = true;
+      select.appendChild(option);
+    });
+
+    var run = state.runs[state.selected];
+    var svg = document.getElementById('chart-histogram');
+    if (!run || !run.transferLatency.length) {
+      reset(svg);
+      return;
+    }
+    barChart(svg, histogramBins(run.transferLatency, 24), { color: run.color });
+  }
+
+  function renderOutcomes() {
+    var tbody = document.querySelector('#outcomes tbody');
+    tbody.innerHTML = '';
+    var anyUnexpected = false;
+
+    state.runs.forEach(function (run) {
+      var row = document.createElement('tr');
+
+      var name = document.createElement('td');
+      name.textContent = run.name;
+      row.appendChild(name);
+
+      var requests = document.createElement('td');
+      requests.textContent = formatInt(run.requests);
+      row.appendChild(requests);
+
+      var failed = document.createElement('td');
+      failed.textContent = formatInt(run.failed);
+      if (run.failed > 0) failed.className = 'bad';
+      row.appendChild(failed);
+
+      var unexpectedTotal = 0;
+      run.unexpected.forEach(function (count) { unexpectedTotal += count; });
+      if (unexpectedTotal > 0) anyUnexpected = true;
+
+      var unexpected = document.createElement('td');
+      unexpected.textContent = formatInt(unexpectedTotal);
+      if (unexpectedTotal > 0) unexpected.className = 'bad';
+      row.appendChild(unexpected);
+
+      var codes = document.createElement('td');
+      var parts = [];
+      run.statuses.forEach(function (count, status) { parts.push(status + ' ×' + formatInt(count)); });
+      codes.textContent = parts.length ? parts.join(', ') : '—';
+      codes.style.textAlign = 'right';
+      row.appendChild(codes);
+
+      tbody.appendChild(row);
+    });
+
+    document.getElementById('outcomes-note').textContent = anyUnexpected
+      ? 'A status other than 201 means the API answered something other than a posted transfer; 200 would mean an idempotency key was reused.'
+      : 'Status counts come from the http_reqs samples. The conservation check prints to the k6 console, not to this file.';
+  }
+
+  function render() {
+    var hasRuns = state.runs.length > 0;
+    document.getElementById('empty').hidden = hasRuns;
+    document.getElementById('results').hidden = !hasRuns;
+    document.getElementById('clear').hidden = !hasRuns;
+
+    if (!hasRuns) return;
+
+    renderCards();
+    renderThroughput();
+    renderLatency();
+    renderHistogram();
+    renderOutcomes();
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Input handling
+  // -----------------------------------------------------------------------------------------
+
+  function readFiles(fileList) {
+    Array.prototype.forEach.call(fileList, function (file) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        addRun(file.name, String(reader.result || ''));
+      };
+      reader.onerror = function () {
+        window.alert('Could not read ' + file.name);
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  var drop = document.getElementById('drop');
+  var loader = document.getElementById('loader');
+
+  ['dragenter', 'dragover'].forEach(function (type) {
+    loader.addEventListener(type, function (event) {
+      event.preventDefault();
+      loader.classList.add('drop-active');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(function (type) {
+    loader.addEventListener(type, function (event) {
+      event.preventDefault();
+      loader.classList.remove('drop-active');
+    });
+  });
+
+  loader.addEventListener('drop', function (event) {
+    if (event.dataTransfer && event.dataTransfer.files) readFiles(event.dataTransfer.files);
+  });
+
+  document.getElementById('files').addEventListener('change', function (event) {
+    readFiles(event.target.files);
+    event.target.value = '';
+  });
+
+  document.getElementById('clear').addEventListener('click', clearAll);
+
+  document.getElementById('select-run').addEventListener('change', function (event) {
+    state.selected = Number(event.target.value) || 0;
+    renderHistogram();
+  });
+
+  // Exposed so the page can be checked without a real file dialog.
+  window.WL = { ingestText: addRun, clear: clearAll, runs: function () { return state.runs; } };
+
+  render();
+})();
+</script>
+</body>
+</html>

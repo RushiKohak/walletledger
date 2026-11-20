@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# k6 exports and charts scratch data (regenerate locally, never commit results)
+k6-results*.json

@@ -96,6 +96,28 @@ The custom `transfer_latency` trend reports the transfer request alone, and `une
 counts responses that were not `201` (should be 0; a `200` would mean an idempotency key was
 reused).
 
+## Visualising a run
+
+`charts.html` turns an export into charts: throughput per second, transfer latency percentiles
+per second, a latency histogram and a status-code table. It is one static page with no
+dependencies and no network access — it computes everything from the file you load and stores
+nothing.
+
+```powershell
+k6 run --out json=k6-results-run1.json k6/transfer.js
+```
+
+Open `k6/charts.html` in a browser, then choose the file or drop it on the page. Load several run
+files at once to put them on the same axes; each file gets its own colour.
+
+`--out json=…` is what makes this possible: it records one object per sample, which is what a
+per-second view needs. A `--summary-export` file holds only end totals, so it cannot be charted
+over time.
+
+The p(95) line drawn on the latency chart is the guardrail declared in `transfer.js`, shown for
+reference. It is not a target, and a run against a different machine or pool size is not
+comparable to it.
+
 ## Running it fairly — record all of this
 
 A number is only meaningful next to the conditions it was produced under:
