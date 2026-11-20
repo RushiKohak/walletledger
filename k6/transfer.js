@@ -78,7 +78,10 @@ function post(path, body, idempotencyKey) {
  * from colliding. It stays far below the API's 255 character limit.
  */
 function newIdempotencyKey(prefix) {
-  return `${prefix}-${__VU}-${__ITER}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // setup() and teardown() run outside a virtual user, where __ITER does not exist (only the VU
+  // context defines it), so it is read through a guard instead of referenced directly.
+  const iteration = typeof __ITER === 'undefined' ? 0 : __ITER;
+  return `${prefix}-${__VU}-${iteration}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 // ---------------------------------------------------------------------------------------------
