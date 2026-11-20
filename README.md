@@ -174,3 +174,27 @@ the end. See `k6/README.md` for configuration, how to run it, and what to record
 
 ## Results
 
+These are measured on a laptop, so they are a check that the service moves money under load without
+distorting the books — not a benchmark. They say nothing about a server.
+
+- **Machine:** 12th Gen Intel Core i5-12500H, 8 GB RAM. Docker Desktop VM: 16 CPUs, 3.7 GiB memory.
+- **Setup:** 50 INR accounts funded with 1,000,000 paise each, 50 virtual users for 60 seconds, one
+  transfer of 1 paise between two random accounts per iteration, a fresh `Idempotency-Key` per
+  request so every call performs a real transfer. `DB_POOL_SIZE=10` (the default), k6 v2.4.0, API and
+  database both from `docker compose up` in the same Docker engine as k6.
+- **Reported as the median of three identical runs**, as `k6/README.md` requires.
+
+| Run | `http_reqs` rate | `http_req_duration` p(95) | `transfer_latency` p(95) | `unexpected_statuses` | Conservation |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 817.71 req/s | 121.28 ms | 121.42 ms | 0 | PASS |
+| 2 | 701.39 req/s | 143.56 ms | 144.09 ms | 0 | PASS |
+| 3 | 780.53 req/s | 85.61 ms | 85.68 ms | 0 | PASS |
+| **Median** | **780.53 req/s** | **121.28 ms** | **121.42 ms** | **0** | **PASS** |
+
+Every request answered `201`: 43,273 to 51,038 transfers per run with zero failed requests. In each
+run the teardown summed the 50 account balances and got 50,000,000 paise — exactly what setup
+deposited — so the load moved money without creating or losing any.
+
+A run exports to `k6-results-run1.json` and the same file opens in `k6/charts.html` if you want the
+per-second view.
+

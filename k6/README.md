@@ -142,7 +142,11 @@ Only measured runs go here. Fill in your own numbers; leave cells blank until yo
 
 | Run | Date | CPU / RAM | Docker memory limit | DB_POOL_SIZE | VUS | DURATION | http_reqs rate (req/s) | http_req_duration p(95) (ms) | transfer_latency p(95) (ms) | unexpected_statuses | Conservation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | | | | | | | | | | | |
-| 2 | | | | | | | | | | | |
-| 3 | | | | | | | | | | | |
-| Median | | | | | | | | | | | |
+| 1 | 2026-11-20 | i5-12500H / 8 GB (16 CPUs in VM) | 3.7 GiB | 10 | 50 | 60s | 817.71 | 121.28 | 121.42 | 0 | PASS |
+| 2 | 2026-11-20 | i5-12500H / 8 GB (16 CPUs in VM) | 3.7 GiB | 10 | 50 | 60s | 701.39 | 143.56 | 144.09 | 0 | PASS |
+| 3 | 2026-11-20 | i5-12500H / 8 GB (16 CPUs in VM) | 3.7 GiB | 10 | 50 | 60s | 780.53 | 85.61 | 85.68 | 0 | PASS |
+| Median | 2026-11-20 | i5-12500H / 8 GB (16 CPUs in VM) | 3.7 GiB | 10 | 50 | 60s | 780.53 | 121.28 | 121.42 | 0 | PASS |
+
+Ran with k6 v2.4.0 on the host against `docker compose up`; the API and database were in the same
+Docker engine, and `http_req_failed` was 0.00% in all three runs (`201` on every transfer, 43,273 to
+51,038 transfers per run).
